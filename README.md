@@ -24,7 +24,7 @@ The result is a productivity experience that feels closer to a virtual coworking
 
 ## Live Demo
 
-https://your-deployment-url.com](https://focus-room-production.up.railway.app/
+https://focus-room-production.up.railway.app
 
 ---
 
