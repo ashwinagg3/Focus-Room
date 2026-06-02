@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Room</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: "#F8F8F6",
+                        surface: "#FFFFFF",
+                        "elevated-surface": "#FFFFFF",
+                        primary: "#2563EB",
+                        success: "#16A34A",
+                        danger: "#DC2626",
+                        warning: "#D97706",
+                        "text-primary": "#111111",
+                        "text-secondary": "#6B7280",
+                        "text-muted": "#9CA3AF",
+                        borderline: "#E7E7E5"
+                    },
+                    fontFamily: {
+                        sans: ["Inter", "sans-serif"],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 24px -4px rgba(0, 0, 0, 0.03), 0 2px 8px -2px rgba(0, 0, 0, 0.02)',
+                        'elevated': '0 12px 40px -4px rgba(0, 0, 0, 0.06), 0 4px 12px -2px rgba(0, 0, 0, 0.03)',
+                        'hover': '0 16px 48px -4px rgba(0, 0, 0, 0.08), 0 6px 16px -2px rgba(0, 0, 0, 0.04)',
+                        'subtle': '0 2px 8px rgba(0, 0, 0, 0.02)',
+                        'inner-light': 'inset 0 1px 0 rgba(255, 255, 255, 0.6)'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Utility styles for typography */
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+        
+        /* Smooth transitions */
+        .transition-soft { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* Custom scrollbar for minimal look */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #E7E7E5; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #D1D5DB; }
+
+        /* Dynamic Sidebar Hiding */
+        body:has(#welcome-page:not(.hidden)) #app-sidebar,
+        body:has(#login-page:not(.hidden)) #app-sidebar,
+        body:has(#register-page:not(.hidden)) #app-sidebar,
+        body:has(#room-page:not(.hidden)) #app-sidebar,
+        body:has(#welcome-page:not(.hidden)) #mobile-topbar,
+        body:has(#login-page:not(.hidden)) #mobile-topbar,
+        body:has(#register-page:not(.hidden)) #mobile-topbar,
+        body:has(#room-page:not(.hidden)) #mobile-topbar {
+            display: none !important;
+        }
+
+        body:not(:has(#welcome-page:not(.hidden))):not(:has(#login-page:not(.hidden))):not(:has(#register-page:not(.hidden))):not(:has(#room-page:not(.hidden))) #view-container {
+            margin-left: 16rem; /* 64 * 0.25rem = 16rem */
+            width: calc(100% - 16rem);
+        }
+
+        /* Generic Alert UI */
+        .alert {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem 1.25rem;
+            background: #FFFFFF;
+            border: 1px solid #E7E7E5;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px -5px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            max-width: 400px;
+        }
+        .alert-icon { font-size: 1.25rem; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; }
+        .alert.error .alert-icon { color: #DC2626; background: rgba(220, 38, 38, 0.1); }
+        .alert.success .alert-icon { color: #16A34A; background: rgba(22, 163, 74, 0.1); }
+        .alert-title { font-weight: 600; font-size: 0.875rem; color: #111111; margin-bottom: 0.25rem; }
+        .alert-message { font-size: 0.875rem; color: #6B7280; line-height: 1.4; }
+
+        /* Video element states */
+        .video-card-container {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: #F3F4F6;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #E7E7E5;
+            transition: all 0.3s ease;
+        }
+        .video-card-container[data-status="unfocused"] {
+            border-color: #DC2626;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body class="bg-background text-text-primary font-sans antialiased overflow-x-hidden min-h-screen selection:bg-primary/20 selection:text-primary relative">
+    
+    <!-- Subtle Ambient Background Layer -->
+    <div class="fixed inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(37,99,235,0.04)_0%,transparent_80%)] z-0"></div>
+
+    <div id="alert-container" class="fixed top-6 right-6 z-[9999] flex flex-col gap-3"></div>
+
+    <!-- MOBILE TOP BAR (Hidden on Desktop) -->
+    <div id="mobile-topbar" class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-background/90 backdrop-blur-md border-b border-borderline z-40 flex items-center justify-between px-4">
+        <div class="flex items-center gap-3">
+            <div class="w-6 h-6 bg-primary rounded shadow-subtle flex items-center justify-center">
+                <span class="material-symbols-rounded text-white text-[14px]">center_focus_strong</span>
+            </div>
+            <span class="font-semibold text-lg tracking-tight">Focus Room</span>
+        </div>
+        <button onclick="document.getElementById('app-sidebar').classList.toggle('-translate-x-full');" class="w-10 h-10 flex items-center justify-center rounded-lg bg-black/5 text-text-primary">
+            <span class="material-symbols-rounded text-[24px]">menu</span>
+        </button>
+    </div>
+
+    <!-- MAIN APP SIDEBAR -->
+    <nav id="app-sidebar" class="fixed left-0 top-0 h-screen w-64 bg-background/95 backdrop-blur-md border-r border-borderline flex flex-col z-50 transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
+        <button onclick="document.getElementById('app-sidebar').classList.add('-translate-x-full');" class="lg:hidden absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg bg-black/5 text-text-secondary hover:text-text-primary">
+            <span class="material-symbols-rounded text-[20px]">close</span>
+        </button>
+        <div class="p-6 flex items-center gap-3">
+            <div class="w-6 h-6 bg-primary rounded shadow-subtle flex items-center justify-center">
+                <span class="material-symbols-rounded text-white text-[14px]">center_focus_strong</span>
+            </div>
+            <span class="font-semibold text-lg tracking-tight">Focus Room</span>
+        </div>
+        
+        <div class="flex-1 py-4 px-4 space-y-1">
+            <button onclick="document.getElementById('home-page').classList.remove('hidden'); document.getElementById('global-leaderboard-page').classList.add('hidden'); document.getElementById('create-room-page').classList.add('hidden');" class="w-full flex items-center gap-3 px-4 py-2.5 text-text-secondary hover:text-text-primary hover:bg-black/5 rounded-lg transition-soft text-sm font-medium text-left">
+                <span class="material-symbols-rounded text-[20px]">home</span> Dashboard
+            </button>
+            
+            <button id="btn-global-leaderboard" class="w-full flex items-center gap-3 px-4 py-2.5 text-text-secondary hover:text-text-primary hover:bg-black/5 rounded-lg transition-soft text-sm font-medium text-left">
+                <span class="material-symbols-rounded text-[20px]">leaderboard</span> Leaderboard
+            </button>
+            
+            <div class="my-4 border-t border-borderline"></div>
+
+            <button id="btn-create-room" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-white hover:bg-primary/90 rounded-lg transition-soft text-sm font-medium text-center shadow-subtle">
+                <span class="material-symbols-rounded text-[20px]">add</span> Create session
+            </button>
+
+            <button id="btn-refresh-rooms" class="w-full flex items-center gap-3 px-4 py-2.5 text-text-secondary hover:text-text-primary hover:bg-black/5 rounded-lg transition-soft text-sm font-medium text-left mt-2">
+                <span class="material-symbols-rounded text-[20px]">refresh</span> Refresh
+            </button>
+        </div>
+
+        <div class="px-4 pb-4">
+            <!-- RECENT ACHIEVEMENT VISIBILITY -->
+            <div class="bg-warning/5 border border-warning/20 rounded-xl p-3 shadow-subtle mb-3 flex items-start gap-3">
+                 <div class="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center text-warning shrink-0 shadow-sm">
+                     <span class="material-symbols-rounded text-[16px]">emoji_events</span>
+                 </div>
+                 <div>
+                     <div class="text-[9px] font-bold text-warning uppercase tracking-widest mb-0.5">Recent Achievement</div>
+                     <div class="text-xs font-semibold text-text-primary">Deep Work Specialist</div>
+                     <div class="text-[9px] font-medium text-text-secondary mt-0.5">Unlocked 2 Days Ago</div>
+                 </div>
+            </div>
+
+            <div class="bg-surface border border-borderline rounded-xl p-4 shadow-subtle mb-4 relative overflow-hidden group">
+                <h4 class="text-[10px] font-semibold text-text-secondary mb-3 uppercase tracking-widest flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">query_stats</span> Performance Summary</h4>
+                <div class="flex justify-between items-center mb-1.5">
+                    <span id="sidebar-level-title" class="text-xs font-bold text-text-primary">Level <span id="sidebar-level">13</span></span>
+                    <span class="text-[10px] font-bold text-primary uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded-md">Rank #<span id="sidebar-rank">8</span></span>
+                </div>
+                <div class="w-full bg-borderline h-1.5 rounded-full mb-4 overflow-hidden shadow-inner">
+                    <div id="sidebar-xp-bar" class="bg-primary h-1.5 rounded-full transition-all duration-1000 relative" style="width: 0%;">
+                        <div class="absolute inset-0 bg-white/20 animate-pulse"></div>
+                    </div>
+                </div>
+                <div class="space-y-2 mt-4 pt-3 border-t border-borderline">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-text-secondary font-medium">Focus Score</span>
+                        <strong id="sidebar-focus-score" class="text-text-primary tabular-nums">94</strong>
+                    </div>
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-text-secondary font-medium">Total Hours</span>
+                        <strong id="sidebar-total-hours" class="text-text-primary tabular-nums">127</strong>
+                    </div>
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-text-secondary font-medium">Perfect Sessions</span>
+                        <strong id="sidebar-perfect-sessions" class="text-text-primary tabular-nums">71</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-borderline flex flex-col gap-4 bg-background/50">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-black/5 flex items-center justify-center text-text-secondary shadow-inner-light">
+                    <span class="material-symbols-rounded text-[20px]">person</span>
+                </div>
+                <div class="flex flex-col">
+                    <span id="sync-status-msg" class="text-xs font-semibold text-text-primary flex items-center gap-1.5">
+                        <div class="w-1.5 h-1.5 bg-success rounded-full shadow-[0_0_8px_rgba(22,163,74,0.6)]"></div> Online
+                    </span>
+                    <span class="text-[10px] text-text-secondary font-medium uppercase tracking-wider">Sync Active</span>
+                </div>
+            </div>
+            <button id="btn-logout" class="w-full flex items-center gap-2 px-4 py-2 text-text-secondary hover:text-danger hover:bg-danger/5 rounded-lg text-sm font-medium transition-soft group">
+                <span class="material-symbols-rounded text-[20px] group-hover:scale-110 transition-transform">logout</span> Sign out
+            </button>
+        </div>
+    </nav>
+
+    <!-- VIEWS CONTAINER -->
+    <div id="view-container" class="relative min-h-screen flex flex-col transition-soft pt-16 lg:pt-0">
+
+        <!-- WELCOME PAGE -->
+        <div id="welcome-page" class="view">
+            <div class="min-h-screen flex flex-col justify-center px-8 lg:px-32 relative bg-surface">
+                
+                <header class="absolute top-0 left-0 w-full p-8 flex justify-between items-center z-20">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 bg-primary rounded-lg shadow-subtle flex items-center justify-center">
+                            <span class="material-symbols-rounded text-white text-[18px]">center_focus_strong</span>
+                        </div>
+                        <span class="font-semibold text-xl tracking-tight">Focus Room</span>
+                    </div>
+                    <div class="flex gap-4">
+                        <button id="btn-to-login" class="text-sm font-medium text-text-secondary hover:text-text-primary transition-colors">Log in</button>
+                        <button id="btn-to-register" class="text-sm font-medium bg-black text-white px-5 py-2 rounded-full hover:bg-black/80 transition-colors shadow-subtle">Get started</button>
+                    </div>
+                </header>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center z-10 max-w-7xl mx-auto w-full pt-20">
+                    <div class="flex flex-col items-start max-w-xl">
+                        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium mb-8">
+                            <span class="material-symbols-rounded text-[14px]">psychology</span>
+                            Premium productivity
+                        </div>
+                        <h1 class="text-5xl lg:text-7xl font-bold tracking-tight text-text-primary leading-[1.1] mb-6">
+                            Where deep work happens.
+                        </h1>
+                        <p class="text-lg text-text-secondary mb-10 leading-relaxed">
+                            A calm, distraction-free environment designed to help you achieve your most ambitious goals. Focus alone or work alongside others with gentle accountability.
+                        </p>
+                        <button onclick="document.getElementById('btn-to-register').click()" class="bg-primary text-white px-8 py-3.5 rounded-full font-medium text-base hover:bg-primary/90 transition-all shadow-elevated flex items-center gap-2">
+                            Start focusing today <span class="material-symbols-rounded text-[18px]">arrow_forward</span>
+                        </button>
+                    </div>
+
+                    <div class="hidden lg:flex justify-center">
+                        <div class="w-full max-w-md bg-white border border-borderline rounded-2xl shadow-elevated p-8 flex flex-col items-center">
+                            <h3 class="text-sm font-medium text-text-secondary mb-8">Current Focus Session</h3>
+                            <div class="text-7xl font-bold tracking-tighter text-text-primary tabular-nums mb-12">
+                                45:00
+                            </div>
+                            <div class="w-full space-y-4">
+                                <div class="flex items-center justify-between p-4 bg-background rounded-xl">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-full bg-black/5 flex items-center justify-center">
+                                            <span class="material-symbols-rounded text-[16px] text-text-secondary">person</span>
+                                        </div>
+                                        <span class="font-medium text-sm">Ashwin</span>
+                                    </div>
+                                    <span class="text-xs font-medium text-success bg-success/10 px-2.5 py-1 rounded-full">Focused</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LOGIN PAGE -->
+        <div id="login-page" class="view hidden">
+            <div class="min-h-screen flex items-center justify-center bg-background px-4">
+                <div class="w-full max-w-sm bg-surface border border-borderline rounded-2xl shadow-soft p-8">
+                    <button id="btn-back-to-welcome-1" class="text-text-muted hover:text-text-primary mb-8 text-sm flex items-center gap-1 transition-colors w-fit">
+                        <span class="material-symbols-rounded text-[18px]">arrow_back</span> Back
+                    </button>
+                    <h2 class="text-2xl font-bold tracking-tight mb-2">Welcome back</h2>
+                    <p class="text-sm text-text-secondary mb-8">Enter your details to sign in to your workspace.</p>
+                    
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-text-primary mb-1.5">Username</label>
+                            <input type="text" id="login-username" class="w-full bg-background border border-borderline rounded-xl p-3 text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-text-primary mb-1.5">Password</label>
+                            <input type="password" id="login-password" class="w-full bg-background border border-borderline rounded-xl p-3 text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                        </div>
+                        <button id="btn-login-submit" class="w-full bg-black text-white font-medium text-sm p-3 rounded-xl hover:bg-black/80 transition-soft mt-2 shadow-subtle">Sign in</button>
+                    </div>
+
+                    <!-- Demo Account Card -->
+                    <div class="mt-8 pt-8 border-t border-borderline">
+                        <h3 class="text-xs font-bold text-text-primary uppercase tracking-widest mb-3">Demo Account</h3>
+                        <p class="text-[11px] text-text-secondary leading-relaxed mb-4">Explore Focus Room instantly with a preloaded account containing focus history, achievements, streaks, and mastery progression.</p>
+                        
+                        <div class="bg-background border border-borderline rounded-xl p-4 space-y-3">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-text-secondary font-medium">Email</span>
+                                <span class="font-bold text-text-primary">demo@focusroom.app</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-text-secondary font-medium">Password</span>
+                                <span class="font-bold text-text-primary">Demo@123</span>
+                            </div>
+                            
+                            <div class="pt-2 flex gap-2">
+                                <button id="btn-copy-demo" class="flex-1 bg-surface border border-borderline text-text-secondary hover:text-text-primary text-[10px] font-bold uppercase tracking-widest py-2 rounded-lg transition-soft text-center flex items-center justify-center gap-1 shadow-sm">
+                                    <span class="material-symbols-rounded text-[14px]">content_copy</span> <span id="copy-demo-text">Copy</span>
+                                </button>
+                                <button id="btn-fill-demo" class="flex-1 bg-primary/10 text-primary hover:bg-primary/20 text-[10px] font-bold uppercase tracking-widest py-2 rounded-lg transition-soft text-center flex items-center justify-center gap-1 shadow-sm">
+                                    <span class="material-symbols-rounded text-[14px]">login</span> Login as Demo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- REGISTER PAGE -->
+        <div id="register-page" class="view hidden">
+            <div class="min-h-screen flex items-center justify-center bg-background px-4 py-12">
+                <div class="w-full max-w-xl bg-surface border border-borderline rounded-2xl shadow-soft p-8 sm:p-10">
+                    <button id="btn-back-to-welcome-2" class="text-text-muted hover:text-text-primary mb-8 text-sm flex items-center gap-1 transition-colors w-fit">
+                        <span class="material-symbols-rounded text-[18px]">arrow_back</span> Back
+                    </button>
+                    <h2 class="text-2xl font-bold tracking-tight mb-2">Create an account</h2>
+                    <p class="text-sm text-text-secondary mb-8">Join the community and start achieving deep focus.</p>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+                        <div>
+                            <label class="block text-sm font-medium text-text-primary mb-1.5">First name</label>
+                            <input type="text" id="reg-firstname" class="w-full bg-background border border-borderline rounded-xl p-3 text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-text-primary mb-1.5">Last name</label>
+                            <input type="text" id="reg-lastname" class="w-full bg-background border border-borderline rounded-xl p-3 text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                        </div>
+                    </div>
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-text-primary mb-1.5">Username</label>
+                            <input type="text" id="reg-username" class="w-full bg-background border border-borderline rounded-xl p-3 text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-medium text-text-primary mb-1.5">Phone (Optional)</label>
+                                <input type="text" id="reg-phone" class="w-full bg-background border border-borderline rounded-xl p-3 text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-text-primary mb-1.5">Email</label>
+                                <input type="email" id="reg-email" class="w-full bg-background border border-borderline rounded-xl p-3 text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-text-primary mb-1.5">Password</label>
+                            <input type="password" id="reg-password" class="w-full bg-background border border-borderline rounded-xl p-3 text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                        </div>
+                        <button id="btn-register-submit" class="w-full bg-black text-white font-medium text-sm p-3.5 rounded-xl hover:bg-black/80 transition-soft mt-4 shadow-subtle">Create account</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD PAGE -->
+        <div id="home-page" class="view hidden p-8 lg:p-12 max-w-6xl mx-auto w-full">
+            
+            <!-- DEMO BANNER -->
+            <div id="demo-banner" class="hidden mb-8 bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-start justify-between gap-4 shadow-sm relative overflow-hidden">
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.05)_0%,transparent_60%)]"></div>
+                <div class="relative z-10 flex gap-3">
+                    <div class="mt-0.5 text-primary">
+                        <span class="material-symbols-rounded text-[20px]">info</span>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-text-primary">Demo Account Mode</h4>
+                        <p class="text-xs text-text-secondary mt-1 leading-relaxed">You are exploring Focus Room using a demo account populated with sample productivity data. Feel free to create rooms and test functionality.</p>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('demo-banner').style.display = 'none'" class="relative z-10 text-text-secondary hover:text-text-primary">
+                    <span class="material-symbols-rounded text-[18px]">close</span>
+                </button>
+            </div>
+            <header class="mb-10 flex flex-col lg:flex-row justify-between lg:items-end gap-6">
+                <div class="flex flex-col">
+                    <h1 id="home-greeting" class="text-3xl font-bold tracking-tight text-text-primary">Good Morning</h1>
+                    <div class="flex flex-wrap items-center gap-4 mt-2">
+                        <p id="home-subtitle" class="text-sm font-medium text-text-secondary">Ready to start another productive day.</p>
+                        <div class="h-4 w-px bg-borderline hidden sm:block"></div>
+                        <div class="hidden sm:flex items-center gap-4 text-sm text-text-secondary font-medium">
+                            <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-primary/60"></span> <strong id="hero-daily-mins" class="font-bold text-text-primary">0</strong> mins focused</span>
+                            <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-warning/60"></span> <strong id="hero-streak" class="font-bold text-text-primary">0</strong> days streak</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="streak-restore-container" class="hidden bg-warning/10 border border-warning/20 px-4 py-3 rounded-xl flex items-center gap-4">
+                    <span class="material-symbols-rounded text-warning">error</span>
+                    <div>
+                        <p class="text-sm font-medium text-warning">Streak broken</p>
+                        <button id="btn-restore-streak" class="text-xs font-medium text-text-primary hover:text-primary transition-colors mt-0.5">Restore for 500 Mastery Points</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- NEW TOP ROW -->
+                <!-- TODAY'S MISSION -->
+                <section class="lg:col-span-4 bg-surface border border-borderline rounded-2xl p-6 shadow-soft relative overflow-hidden group shadow-inner-light flex flex-col justify-between hover:-translate-y-0.5 transition-soft">
+                    <h4 class="text-[10px] font-semibold text-text-secondary mb-2 flex items-center gap-2 uppercase tracking-widest">
+                         <span class="material-symbols-rounded text-[14px] text-text-primary">flag</span> Today's Mission
+                    </h4>
+                    <div class="flex-1 flex flex-col justify-center py-2">
+                        <div class="flex justify-between items-end mb-3">
+                             <div>
+                                 <div class="text-[10px] text-text-secondary font-medium uppercase tracking-wider mb-0.5">Completed</div>
+                                 <div class="text-2xl font-bold text-text-primary tabular-nums tracking-tight">1h 42m</div>
+                             </div>
+                             <div class="text-right">
+                                 <div class="text-[10px] text-text-secondary font-medium uppercase tracking-wider mb-0.5">Goal</div>
+                                 <div class="text-sm font-semibold text-text-primary tabular-nums">3h 00m</div>
+                             </div>
+                        </div>
+                        <div class="w-full bg-background rounded-full h-1.5 mb-3 overflow-hidden shadow-inner border border-borderline/50">
+                             <div class="bg-primary h-1.5 rounded-full" style="width: 57%;"></div>
+                        </div>
+                        <div class="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                             <span class="text-primary">57% Progress</span>
+                             <span class="text-success flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(22,163,74,0.6)] animate-pulse"></span> On Track</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- LIVE FOCUS NETWORK -->
+                <section class="lg:col-span-5 bg-surface border border-borderline rounded-2xl p-6 shadow-soft relative overflow-hidden group shadow-inner-light flex flex-col justify-between hover:-translate-y-0.5 transition-soft">
+                    <div class="flex justify-between items-center mb-4 relative z-10">
+                        <h4 class="text-[10px] font-semibold text-text-secondary flex items-center gap-2 uppercase tracking-widest">
+                             <span class="material-symbols-rounded text-[14px] text-primary">public</span> Live Focus Network
+                        </h4>
+                        <div class="text-[9px] font-bold text-success uppercase tracking-widest flex items-center gap-1">
+                             <span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(22,163,74,0.6)] animate-pulse"></span> Live
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4 mb-5 relative z-10">
+                         <div>
+                             <div class="text-xl font-bold text-text-primary tabular-nums tracking-tight">127</div>
+                             <div class="text-[9px] text-text-secondary font-semibold uppercase tracking-widest mt-0.5">Users Focusing</div>
+                         </div>
+                         <div>
+                             <div class="text-xl font-bold text-text-primary tabular-nums tracking-tight">18</div>
+                             <div class="text-[9px] text-text-secondary font-semibold uppercase tracking-widest mt-0.5">Active Rooms</div>
+                         </div>
+                         <div>
+                             <div class="text-xl font-bold text-success tabular-nums tracking-tight">92%</div>
+                             <div class="text-[9px] text-text-secondary font-semibold uppercase tracking-widest mt-0.5">Network Focus Rate</div>
+                         </div>
+                    </div>
+                    <div class="mt-auto pt-4 border-t border-borderline relative z-10">
+                        <div class="text-[9px] text-text-secondary font-bold uppercase tracking-widest mb-3">Active Rooms Preview</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="bg-background border border-borderline rounded-lg p-2 flex justify-between items-center">
+                                <span class="text-xs font-semibold text-text-primary truncate">Deep Work Morning</span>
+                                <span class="text-[10px] font-medium text-text-secondary shrink-0"><span class="material-symbols-rounded text-[10px] align-middle">person</span> 8</span>
+                            </div>
+                            <div class="bg-background border border-borderline rounded-lg p-2 flex justify-between items-center">
+                                <span class="text-xs font-semibold text-text-primary truncate">DSA Sprint</span>
+                                <span class="text-[10px] font-medium text-text-secondary shrink-0"><span class="material-symbols-rounded text-[10px] align-middle">person</span> 5</span>
+                            </div>
+                            <div class="bg-background border border-borderline rounded-lg p-2 flex justify-between items-center">
+                                <span class="text-xs font-semibold text-text-primary truncate">Portfolio Builders</span>
+                                <span class="text-[10px] font-medium text-text-secondary shrink-0"><span class="material-symbols-rounded text-[10px] align-middle">person</span> 3</span>
+                            </div>
+                            <div class="bg-background border border-borderline rounded-lg p-2 flex justify-between items-center">
+                                <span class="text-xs font-semibold text-text-primary truncate">Backend Builders</span>
+                                <span class="text-[10px] font-medium text-text-secondary shrink-0"><span class="material-symbols-rounded text-[10px] align-middle">person</span> 2</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- FOCUS REPUTATION -->
+                <section class="lg:col-span-3 bg-surface border border-borderline rounded-2xl p-6 shadow-soft relative overflow-hidden group shadow-inner-light flex flex-col justify-between hover:-translate-y-0.5 transition-soft">
+                    <div class="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.06] transition-soft text-primary">
+                        <span class="material-symbols-rounded text-[48px]">military_tech</span>
+                    </div>
+                    <div>
+                        <h3 class="text-[10px] font-semibold text-text-secondary mb-3 flex items-center gap-2 uppercase tracking-widest">
+                            <span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span> Focus Reputation
+                        </h3>
+                        <div class="flex items-center gap-3 relative z-10">
+                            <div class="w-12 h-12 rounded-full border-[3px] border-borderline border-t-primary border-r-primary flex items-center justify-center text-sm font-bold text-text-primary shadow-sm relative">
+                                <div class="absolute inset-0 rounded-full border-[3px] border-primary opacity-20"></div>
+                                <span id="rep-focus-score">94</span>
+                            </div>
+                            <div>
+                                <div class="text-sm font-bold text-text-primary">Elite Performer</div>
+                                <div class="text-[9px] font-bold text-success uppercase tracking-widest mt-0.5 flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(22,163,74,0.6)] animate-pulse"></span> Accountability Active
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 mt-5 pt-4 border-t border-borderline relative z-10">
+                        <div>
+                            <div class="text-sm font-bold text-text-primary" id="rep-streak">32<span class="text-[10px] font-medium text-text-secondary ml-0.5">Days</span></div>
+                            <div class="text-[9px] text-text-secondary uppercase tracking-widest font-semibold mt-0.5">Streak</div>
+                        </div>
+                        <div>
+                            <div class="text-sm font-bold text-text-primary" id="rep-perfect">71<span class="text-[10px] font-medium text-text-secondary ml-0.5">Total</span></div>
+                            <div class="text-[9px] text-text-secondary uppercase tracking-widest font-semibold mt-0.5">Perfect</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TOP STATISTICS -->
+                <section class="lg:col-span-12 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div class="bg-surface border border-borderline p-6 rounded-2xl shadow-soft relative overflow-hidden group hover:shadow-hover hover:-translate-y-0.5 transition-soft shadow-inner-light flex flex-col justify-between">
+                        <div class="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.06] transition-soft text-primary">
+                            <span class="material-symbols-rounded text-[48px]">schedule</span>
+                        </div>
+                        <h4 class="text-[10px] font-semibold text-text-secondary mb-6 flex items-center gap-2 uppercase tracking-widest">
+                            <span class="w-1.5 h-1.5 rounded-full bg-primary/40"></span> Today's Focus
+                        </h4>
+                        <div class="flex items-end justify-between relative z-10">
+                            <div class="flex flex-col">
+                                <div id="stat-daily-time" class="text-3xl font-bold text-text-primary tracking-tight tabular-nums">0m</div>
+                                <span class="text-[9px] font-bold text-text-secondary uppercase tracking-widest mt-1.5">Daily Goal: <span class="text-text-primary">120m</span></span>
+                            </div>
+                            <div class="w-10 h-10 rounded-full border-[3px] border-borderline border-t-primary border-r-primary transform rotate-45 opacity-80 shadow-sm"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-surface border border-borderline p-6 rounded-2xl shadow-soft relative overflow-hidden group hover:shadow-hover hover:-translate-y-0.5 transition-soft shadow-inner-light flex flex-col justify-between">
+                        <div class="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.06] transition-soft text-text-primary">
+                            <span class="material-symbols-rounded text-[48px]">star</span>
+                        </div>
+                        <h4 class="text-[10px] font-semibold text-text-secondary mb-6 flex items-center gap-2 uppercase tracking-widest">
+                            <span class="w-1.5 h-1.5 rounded-full bg-text-muted/40"></span> Mastery Points
+                        </h4>
+                        <div class="flex items-end justify-between relative z-10">
+                            <div class="flex flex-col">
+                                <div id="stat-total-points" class="text-3xl font-bold text-text-primary tracking-tight tabular-nums">0</div>
+                                <div class="flex items-center gap-1 mt-1.5">
+                                    <span class="material-symbols-rounded text-success text-[14px]">trending_up</span>
+                                    <span id="stat-daily-points" class="text-[9px] font-bold text-success uppercase tracking-widest">+0 today</span>
+                                </div>
+                            </div>
+                            <svg width="48" height="24" viewBox="0 0 48 24" class="text-borderline group-hover:text-primary/30 transition-soft opacity-60" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="0,20 12,12 24,16 36,6 48,2"/></svg>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface border border-borderline p-6 rounded-2xl shadow-soft relative overflow-hidden group hover:shadow-hover hover:-translate-y-0.5 transition-soft shadow-inner-light flex flex-col justify-between">
+                        <div class="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.06] transition-soft text-warning">
+                            <span class="material-symbols-rounded text-[48px]">local_fire_department</span>
+                        </div>
+                        <h4 class="text-[10px] font-semibold text-text-secondary mb-6 flex items-center gap-2 uppercase tracking-widest">
+                            <span class="w-1.5 h-1.5 rounded-full bg-warning/40"></span> Current Streak
+                        </h4>
+                        <div class="flex items-end justify-between relative z-10">
+                            <div class="flex flex-col">
+                                <div id="stat-streak" class="text-3xl font-bold text-warning tracking-tight tabular-nums">0 Days</div>
+                                <span class="text-[9px] font-bold text-text-secondary uppercase tracking-widest mt-1.5">Consistency is key</span>
+                            </div>
+                            <div class="flex gap-1.5 opacity-80 items-end h-8">
+                                <div class="w-1.5 h-3 bg-warning/30 rounded-full"></div>
+                                <div class="w-1.5 h-5 bg-warning/50 rounded-full"></div>
+                                <div class="w-1.5 h-8 bg-warning rounded-full shadow-[0_0_8px_rgba(217,119,6,0.4)]"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- BOTTOM ROW -->
+                <div class="lg:col-span-7 flex flex-col gap-6">
+                    <!-- WHAT HAPPENS IN A SESSION -->
+                    <section class="bg-surface border border-borderline rounded-2xl p-6 shadow-soft shadow-inner-light hover:-translate-y-0.5 transition-soft">
+                        <h3 class="text-[10px] font-semibold text-text-secondary mb-4 uppercase tracking-widest flex items-center gap-2">
+                             <span class="material-symbols-rounded text-[14px]">info</span> What Happens In A Session?
+                        </h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                            <div class="flex flex-col items-center text-center gap-2 p-3 bg-background border border-borderline rounded-xl">
+                                <span class="material-symbols-rounded text-primary text-[20px]">videocam</span>
+                                <span class="text-[9px] font-bold uppercase tracking-widest text-text-primary">Live Video<br>Presence</span>
+                            </div>
+                            <div class="flex flex-col items-center text-center gap-2 p-3 bg-background border border-borderline rounded-xl">
+                                <span class="material-symbols-rounded text-primary text-[20px]">visibility</span>
+                                <span class="text-[9px] font-bold uppercase tracking-widest text-text-primary">Focus<br>Monitoring</span>
+                            </div>
+                            <div class="flex flex-col items-center text-center gap-2 p-3 bg-background border border-borderline rounded-xl">
+                                <span class="material-symbols-rounded text-primary text-[20px]">group</span>
+                                <span class="text-[9px] font-bold uppercase tracking-widest text-text-primary">Accountability<br>Tracking</span>
+                            </div>
+                            <div class="flex flex-col items-center text-center gap-2 p-3 bg-background border border-borderline rounded-xl">
+                                <span class="material-symbols-rounded text-primary text-[20px]">military_tech</span>
+                                <span class="text-[9px] font-bold uppercase tracking-widest text-text-primary">Mastery<br>Rewards</span>
+                            </div>
+                            <div class="flex flex-col items-center text-center gap-2 p-3 bg-background border border-borderline rounded-xl">
+                                <span class="material-symbols-rounded text-primary text-[20px]">notifications_active</span>
+                                <span class="text-[9px] font-bold uppercase tracking-widest text-text-primary">Telegram<br>Alerts</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ACTIVE ROOMS -->
+                    <section>
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold text-text-primary">Active Sessions</h3>
+                            <div class="flex items-center gap-2 bg-surface border border-borderline p-1 rounded-xl shadow-subtle">
+                               <input type="text" id="input-room-code" placeholder="Code" class="bg-transparent px-3 py-1.5 text-text-primary text-xs focus:outline-none w-24">
+                               <button id="btn-join-room" class="bg-primary text-white font-medium text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-soft">Join</button>
+                            </div>
+                        </div>
+                        <div id="room-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <!-- Room cards injected here by script.js -->
+                        </div>
+                    </section>
+                    
+                    <!-- SESSION HISTORY PREVIEW -->
+                    <section class="mt-2">
+                         <h3 class="text-sm font-semibold text-text-primary mb-4">Recent Sessions</h3>
+                         <div id="session-history-list" class="bg-surface border border-borderline rounded-2xl shadow-soft divide-y divide-borderline shadow-inner-light overflow-hidden">
+                              <div class="p-4 text-center text-xs text-text-muted">No session history available yet.</div>
+                         </div>
+                    </section>
+                </div>
+
+                <!-- RIGHT COLUMN -->
+                <div class="lg:col-span-5 flex flex-col gap-6">
+                    <!-- LIVE ACTIVITY FEED -->
+                    <section class="bg-surface border border-borderline rounded-2xl p-6 shadow-soft shadow-inner-light flex-1">
+                         <h3 class="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_8px_rgba(22,163,74,0.6)]"></span> Live Activity Feed</h3>
+                         <div id="activity-feed-list" class="flex flex-col gap-6 relative">
+                             <div class="text-xs text-text-muted">No recent activity.</div>
+                         </div>
+                         
+                         <div class="mt-8 pt-6 border-t border-borderline">
+                             <h3 class="text-sm font-semibold text-text-primary mb-6">Weekly Focus Trend</h3>
+                             <div id="weekly-trend-chart" class="h-24 w-full flex items-end justify-between gap-2 border-b border-borderline pb-1">
+                                 <div class="w-full bg-primary/20 rounded-t-sm h-[30%] hover:bg-primary transition-soft cursor-pointer relative group"><div class="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded">2h</div></div>
+                                 <div class="w-full bg-primary/20 rounded-t-sm h-[50%] hover:bg-primary transition-soft cursor-pointer relative group"><div class="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded">4h</div></div>
+                                 <div class="w-full bg-primary/20 rounded-t-sm h-[40%] hover:bg-primary transition-soft cursor-pointer relative group"><div class="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded">3h</div></div>
+                                 <div class="w-full bg-primary/40 rounded-t-sm h-[80%] hover:bg-primary transition-soft cursor-pointer relative group"><div class="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded">6h</div></div>
+                                 <div class="w-full bg-primary/20 rounded-t-sm h-[60%] hover:bg-primary transition-soft cursor-pointer relative group"><div class="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded">5h</div></div>
+                                 <div class="w-full bg-primary rounded-t-sm h-[100%] shadow-[0_0_12px_rgba(37,99,235,0.4)] cursor-pointer relative group"><div class="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded">8h</div></div>
+                                 <div class="w-full bg-borderline rounded-t-sm h-[10%]"></div>
+                             </div>
+                             <div class="flex justify-between text-[9px] text-text-secondary font-bold uppercase mt-2 tracking-widest">
+                                 <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span class="text-primary">Sat</span><span>Sun</span>
+                             </div>
+                         </div>
+                    </section>
+
+                    <!-- PLATFORM CAPABILITIES -->
+                    <section class="bg-surface border border-borderline rounded-2xl p-6 shadow-soft shadow-inner-light hover:-translate-y-0.5 transition-soft">
+                        <h3 class="text-[10px] font-semibold text-text-secondary mb-4 uppercase tracking-widest flex items-center gap-2">
+                             <span class="material-symbols-rounded text-[14px]">memory</span> Platform Capabilities
+                        </h3>
+                        <ul class="space-y-3">
+                            <li class="flex items-center gap-2 text-xs font-medium text-text-primary">
+                                <span class="material-symbols-rounded text-success text-[14px]">check</span> Live Video Rooms
+                            </li>
+                            <li class="flex items-center gap-2 text-xs font-medium text-text-primary">
+                                <span class="material-symbols-rounded text-success text-[14px]">check</span> Real-Time Synchronization
+                            </li>
+                            <li class="flex items-center gap-2 text-xs font-medium text-text-primary">
+                                <span class="material-symbols-rounded text-success text-[14px]">check</span> Focus Detection
+                            </li>
+                            <li class="flex items-center gap-2 text-xs font-medium text-text-primary">
+                                <span class="material-symbols-rounded text-success text-[14px]">check</span> Telegram Accountability
+                            </li>
+                            <li class="flex items-center gap-2 text-xs font-medium text-text-primary">
+                                <span class="material-symbols-rounded text-success text-[14px]">check</span> Mastery Progression
+                            </li>
+                            <li class="flex items-center gap-2 text-xs font-medium text-text-primary">
+                                <span class="material-symbols-rounded text-success text-[14px]">check</span> Leaderboards
+                            </li>
+                            <li class="flex items-center gap-2 text-xs font-medium text-text-primary">
+                                <span class="material-symbols-rounded text-success text-[14px]">check</span> Private Rooms
+                            </li>
+                            <li class="flex items-center gap-2 text-xs font-medium text-text-primary">
+                                <span class="material-symbols-rounded text-success text-[14px]">check</span> WebRTC Collaboration
+                            </li>
+                        </ul>
+                    </section>
+
+                    <!-- QUICK PRODUCT TOUR -->
+                    <section class="bg-primary/5 border border-primary/20 rounded-2xl p-6 shadow-inner-light hover:-translate-y-0.5 transition-soft">
+                        <h3 class="text-sm font-bold text-text-primary mb-2">Explore Focus Room</h3>
+                        <p class="text-[10px] text-text-secondary uppercase tracking-widest font-semibold mb-4">Quick Tour</p>
+                        <div class="space-y-2 mb-6">
+                            <div class="flex items-center gap-3 text-xs font-medium text-text-primary">
+                                <span class="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center text-[9px] font-bold">1</span> Create Session
+                            </div>
+                            <div class="flex items-center gap-3 text-xs font-medium text-text-primary">
+                                <span class="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center text-[9px] font-bold">2</span> Join Room
+                            </div>
+                            <div class="flex items-center gap-3 text-xs font-medium text-text-primary">
+                                <span class="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center text-[9px] font-bold">3</span> Test Video
+                            </div>
+                            <div class="flex items-center gap-3 text-xs font-medium text-text-primary">
+                                <span class="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center text-[9px] font-bold">4</span> Trigger Focus Detection
+                            </div>
+                            <div class="flex items-center gap-3 text-xs font-medium text-text-primary">
+                                <span class="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center text-[9px] font-bold">5</span> View Leaderboard
+                            </div>
+                            <div class="flex items-center gap-3 text-xs font-medium text-text-primary">
+                                <span class="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center text-[9px] font-bold">6</span> Explore Profile
+                            </div>
+                        </div>
+                        <button onclick="document.getElementById('btn-create-room').click()" class="w-full bg-primary hover:bg-primary/90 text-white font-medium text-xs uppercase tracking-wider px-5 py-2.5 rounded-lg transition-soft shadow-subtle flex items-center justify-center gap-2">
+                            Start Exploring <span class="material-symbols-rounded text-[14px]">arrow_forward</span>
+                        </button>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- LEADERBOARD PAGE -->
+        <div id="global-leaderboard-page" class="view hidden p-8 lg:p-12 max-w-4xl mx-auto w-full">
+            <header class="mb-8 flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight text-text-primary">Leaderboard</h2>
+                    <p class="text-sm text-text-secondary mt-1">Top performers ranked by mastery points.</p>
+                </div>
+                <button id="btn-back-home-lb" class="text-sm font-medium text-text-secondary hover:text-text-primary flex items-center gap-1.5 bg-background border border-borderline px-4 py-2 rounded-xl transition-soft" onclick="showView('home')">
+                    <span class="material-symbols-rounded text-[18px]">arrow_back</span> Return
+                </button>
+            </header>
+            
+            <div class="bg-surface border border-borderline rounded-2xl shadow-soft overflow-hidden">
+                <div class="grid grid-cols-12 gap-4 p-4 border-b border-borderline bg-background text-[10px] font-bold text-text-secondary uppercase tracking-widest">
+                    <div class="col-span-1 text-center">Rank</div>
+                    <div class="col-span-4">Operator</div>
+                    <div class="col-span-2 text-center">Mastery</div>
+                    <div class="col-span-2 text-center">Focus Score</div>
+                    <div class="col-span-3 text-right">Consistency</div>
+                </div>
+                <div id="global-leaderboard-list" class="divide-y divide-borderline">
+                    <!-- Leaderboard items injected here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- CREATE ROOM PAGE -->
+        <div id="create-room-page" class="view hidden p-8 lg:p-12 max-w-3xl mx-auto w-full">
+            <header class="mb-10 flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight text-text-primary">Create Focus Session</h2>
+                    <p class="text-sm text-text-secondary mt-1">Set up a quiet space to accomplish deep work.</p>
+                </div>
+                <button id="btn-back-home" class="w-8 h-8 flex items-center justify-center rounded-full bg-background border border-borderline text-text-secondary hover:text-text-primary transition-soft">
+                    <span class="material-symbols-rounded text-[20px]">close</span>
+                </button>
+            </header>
+            
+            <div class="bg-surface border border-borderline p-8 rounded-2xl shadow-soft space-y-8">
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-text-primary mb-1.5">Session name</label>
+                        <input type="text" id="input-create-name" placeholder="e.g. Deep Work Morning" class="w-full bg-background border border-borderline p-3 rounded-xl text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-text-primary mb-1.5">Visibility</label>
+                        <select id="select-create-privacy" class="w-full bg-background border border-borderline p-3 rounded-xl text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft appearance-none">
+                            <option value="Public">Public (Anyone can join)</option>
+                            <option value="Private">Private (Invite only)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-text-primary mb-1.5">Focus mode</label>
+                        <select id="select-create-mode" class="w-full bg-background border border-borderline p-3 rounded-xl text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft appearance-none">
+                            <option value="Commitment">Commitment (Standard)</option>
+                            <option value="Survival">Survival (Strict accountability)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-text-primary mb-1.5">Duration (Hours)</label>
+                        <input type="number" id="input-create-time" value="1" min="1" max="24" class="w-full bg-background border border-borderline p-3 rounded-xl text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-text-primary mb-1.5">Allowed websites (Optional)</label>
+                    <p class="text-xs text-text-secondary mb-3">Add domains you need for research without breaking focus.</p>
+                    <input type="text" id="input-create-whitelist" placeholder="github.com, figma.com" class="w-full bg-background border border-borderline p-3 rounded-xl text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-soft mb-3">
+                    <div class="flex flex-wrap gap-2">
+                        <button class="text-xs font-medium px-3 py-1.5 bg-background border border-borderline rounded-lg text-text-secondary hover:text-text-primary hover:border-text-secondary transition-soft" onclick="document.getElementById('input-create-whitelist').value += (document.getElementById('input-create-whitelist').value ? ', ' : '') + 'leetcode.com'">+ LeetCode</button>
+                        <button class="text-xs font-medium px-3 py-1.5 bg-background border border-borderline rounded-lg text-text-secondary hover:text-text-primary hover:border-text-secondary transition-soft" onclick="document.getElementById('input-create-whitelist').value += (document.getElementById('input-create-whitelist').value ? ', ' : '') + 'chatgpt.com'">+ ChatGPT</button>
+                        <button class="text-xs font-medium px-3 py-1.5 bg-background border border-borderline rounded-lg text-text-secondary hover:text-text-primary hover:border-text-secondary transition-soft" onclick="document.getElementById('input-create-whitelist').value += (document.getElementById('input-create-whitelist').value ? ', ' : '') + 'github.com'">+ GitHub</button>
+                    </div>
+                </div>
+
+                <div class="pt-4">
+                    <button id="btn-submit-create" class="w-full bg-primary text-white font-medium text-sm p-3.5 rounded-xl hover:bg-primary/90 transition-soft shadow-subtle flex justify-center items-center gap-2">
+                        Start session
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ACTIVE ROOM PAGE -->
+        <div id="room-page" class="view hidden h-screen flex flex-col bg-background">
+            
+            <!-- Top Header -->
+            <header class="h-16 border-b border-borderline bg-surface flex justify-between items-center px-6 shrink-0">
+                <div class="flex items-center gap-4">
+                    <button id="btn-leave-room" class="text-sm font-medium text-text-secondary hover:text-danger flex items-center gap-1.5 transition-colors">
+                        <span class="material-symbols-rounded text-[18px]">arrow_back</span> Leave
+                    </button>
+                    <div class="h-5 w-px bg-borderline"></div>
+                    <div class="flex items-center gap-3">
+                        <span id="room-mode" class="text-[10px] font-semibold uppercase tracking-wider text-text-secondary bg-background px-2 py-1 rounded">Commitment</span>
+                        <h2 id="room-title" class="font-semibold text-text-primary">Focus Session</h2>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 text-sm bg-background border border-borderline px-3 py-1.5 rounded-lg text-text-secondary font-medium">
+                        Code: <span id="room-code-display" class="text-text-primary tabular-nums">0000</span>
+                        <button id="btn-copy-code" class="text-text-muted hover:text-text-primary transition-colors ml-1 flex items-center"><span class="material-symbols-rounded text-[16px]">content_copy</span></button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="flex-1 flex overflow-hidden">
+                
+                <!-- Center: Video Grid (Hero) -->
+                <section class="flex-1 bg-surface relative p-6 overflow-y-auto flex flex-col">
+                    <div class="flex items-center justify-between mb-4 shrink-0">
+                        <h3 class="text-base font-semibold text-text-primary flex items-center gap-2">
+                            <span class="material-symbols-rounded text-[20px] text-text-secondary">groups</span> Participants (<span id="participant-count">0</span>)
+                        </h3>
+                        <div class="flex gap-2">
+                            <button id="btn-toggle-mic" class="w-10 h-10 rounded-full bg-background border border-borderline flex items-center justify-center text-text-secondary hover:text-text-primary transition-soft shadow-subtle">
+                                <span class="material-symbols-rounded text-[20px]">mic</span>
+                            </button>
+                            <button id="btn-toggle-vid" class="w-10 h-10 rounded-full bg-background border border-borderline flex items-center justify-center text-text-secondary hover:text-text-primary transition-soft shadow-subtle">
+                                <span class="material-symbols-rounded text-[20px]">videocam</span>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Responsive Video Grid -->
+                    <div id="video-grid" class="grid gap-4 w-full flex-1 min-h-0" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-content: start;">
+                        <!-- Videos injected here by script.js -->
+                    </div>
+                </section>
+
+                <!-- Right Sidebar: Timer & Stats -->
+                <aside class="w-80 border-l border-borderline bg-background flex flex-col shrink-0 overflow-y-auto hidden lg:flex">
+                    
+                    <!-- Timer Section -->
+                    <div class="p-6 border-b border-borderline flex flex-col items-center bg-surface">
+                        <div class="inline-flex items-center gap-2 text-xs font-medium text-text-secondary bg-background border border-borderline px-3 py-1.5 rounded-full mb-6">
+                            Phase <span id="session-number">1</span> • <span id="timer-phase-label" class="text-primary">Focusing</span>
+                        </div>
+                        <div id="countdown-timer" class="text-6xl font-bold text-text-primary tabular-nums tracking-tight mb-2">25:00</div>
+                        <div class="text-xs font-medium text-text-secondary">Session Total: <span id="total-room-time" class="tabular-nums">00:00:00</span></div>
+                    </div>
+                    
+                    <!-- Stats Section (Live Room Insights) -->
+                    <div class="p-6 border-b border-borderline">
+                        <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span> Live Room Insights</h3>
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <div class="bg-surface border border-borderline rounded-xl p-3 shadow-subtle text-center">
+                                <div class="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1">Focus Score</div>
+                                <div id="stat-score" class="text-lg font-bold text-success tabular-nums tracking-tight">100%</div>
+                            </div>
+                            <div class="bg-surface border border-borderline rounded-xl p-3 shadow-subtle text-center">
+                                <div class="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1">Mode</div>
+                                <div class="text-sm font-bold text-text-primary uppercase mt-1 tracking-wider" id="sidebar-mode">Active</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-surface border border-borderline rounded-xl p-3 shadow-subtle text-center">
+                                <div class="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1">Violations</div>
+                                <div class="text-sm font-bold text-text-primary tabular-nums tracking-tight">0</div>
+                            </div>
+                            <div class="bg-surface border border-borderline rounded-xl p-3 shadow-subtle text-center">
+                                <div class="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1">Status</div>
+                                <div class="text-[10px] font-bold text-success uppercase mt-1 tracking-widest">Locked In</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Leaderboard Panel -->
+                    <div class="p-6 border-b border-borderline">
+                        <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
+                            <span class="material-symbols-rounded text-[18px]">leaderboard</span> Standings
+                        </h3>
+                        <div id="leaderboard" class="flex flex-col gap-2">
+                            <!-- Leaderboard injected here -->
+                        </div>
+                    </div>
+
+                    <!-- Research Links -->
+                    <div class="p-6 flex-1 bg-surface">
+                        <h3 class="text-sm font-semibold text-text-primary mb-2 flex items-center gap-2">
+                            <span class="material-symbols-rounded text-[18px]">public</span> Allowed Resources
+                        </h3>
+                        <p class="text-xs text-text-secondary mb-4 leading-relaxed">Accessing these websites will not break your focus streak.</p>
+                        <div id="room-research-list" class="flex flex-col gap-2">
+                            <!-- Whitelist links injected here -->
+                        </div>
+                    </div>
+
+                </aside>
+            </main>
+
+            <!-- Session Footer -->
+            <footer class="h-10 border-t border-borderline bg-surface flex items-center justify-between px-6 shrink-0 text-xs font-medium text-text-secondary">
+                <div class="flex items-center gap-4">
+                    <span class="flex items-center gap-1.5"><div class="w-2 h-2 bg-success rounded-full"></div> Connection Stable</span>
+                    <span class="w-px h-3 bg-borderline"></span>
+                    <span>Accountability Active</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span>Whitelist Monitoring: <span class="text-text-primary font-semibold">ON</span></span>
+                </div>
+            </footer>
+
+        </div>
+
+    </div> <!-- End View Container -->
+
+    <style>
+        /* Specific overrides mapped to script.js generated classes */
+        .room-card {
+            background: #FFFFFF;
+            border: 1px solid #E7E7E5;
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+            transition: all 0.3s ease;
+        }
+        .room-card:hover {
+            box-shadow: 0 10px 30px -5px rgba(0,0,0,0.05);
+            transform: translateY(-2px);
+        }
+        .mantra-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #6B7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+        .room-card h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #111111;
+        }
+        .room-meta {
+            font-size: 0.8125rem;
+            color: #6B7280;
+        }
+        .btn.primary {
+            background: #2563EB;
+            color: #FFFFFF;
+            font-size: 0.875rem;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .btn.primary:hover {
+            background: rgba(37, 99, 235, 0.9);
+        }
+
+        /* Leaderboard items */
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            font-size: 0.875rem;
+        }
+        .leaderboard-rank { width: 40px; font-weight: 600; color: #6B7280; text-align: center; }
+        .leaderboard-details { flex: 1; font-weight: 500; color: #111111; }
+        .user-points { font-weight: 600; color: #2563EB; tabular-nums; }
+
+        .btn-pill {
+            display: block;
+            background: #F8F8F6;
+            border: 1px solid #E7E7E5;
+            color: #111111;
+            padding: 0.625rem 0.875rem;
+            border-radius: 8px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-pill:hover {
+            background: #F3F4F6;
+        }
+    </style>
+
+    <!-- SESSION SUMMARY MODAL -->
+    <div id="session-summary-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-surface border border-borderline rounded-3xl p-8 max-w-md w-full shadow-hover transform scale-95 transition-transform duration-300 flex flex-col items-center">
+            <div class="w-16 h-16 rounded-2xl bg-success/10 flex items-center justify-center mb-6 shadow-inner-light">
+                <span class="material-symbols-rounded text-success text-[32px]">workspace_premium</span>
+            </div>
+            <h2 class="text-2xl font-bold text-text-primary tracking-tight mb-2">Session Complete</h2>
+            <p class="text-sm text-text-secondary mb-8 text-center" id="summary-message">You've successfully completed your focus session.</p>
+            
+            <div class="w-full grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-background border border-borderline rounded-xl p-4 flex flex-col items-center">
+                    <span class="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1">Focus Time</span>
+                    <span class="text-xl font-bold text-text-primary tabular-nums" id="summary-time">0m</span>
+                </div>
+                <div class="bg-background border border-borderline rounded-xl p-4 flex flex-col items-center">
+                    <span class="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1">Focus Score</span>
+                    <span class="text-xl font-bold text-success tabular-nums" id="summary-score">100%</span>
+                </div>
+            </div>
+
+            <div class="w-full bg-primary/5 border border-primary/20 rounded-xl p-5 mb-8 relative overflow-hidden">
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.1)_0%,transparent_70%)]"></div>
+                <div class="relative z-10 flex flex-col items-center">
+                    <span class="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">Mastery Earned</span>
+                    <div class="flex items-end gap-2 mb-2">
+                        <span class="text-4xl font-bold text-text-primary tracking-tight" id="summary-xp">+0</span>
+                        <span class="text-sm font-bold text-primary mb-1">XP</span>
+                    </div>
+                    <div class="flex gap-2 text-[10px] font-bold uppercase tracking-widest">
+                        <span class="bg-surface px-2 py-1 rounded shadow-subtle text-text-secondary" id="summary-base-xp">Base: 0</span>
+                        <span class="bg-warning/10 text-warning px-2 py-1 rounded shadow-subtle hidden" id="summary-multiplier-badge">1.5x</span>
+                        <span class="bg-success/10 text-success px-2 py-1 rounded shadow-subtle hidden" id="summary-perfect-badge">Perfect</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-close-summary" class="w-full bg-text-primary text-surface font-bold text-sm py-3.5 rounded-xl hover:bg-black/80 transition-soft shadow-elevated uppercase tracking-widest">Continue</button>
+        </div>
+    </div>
+
+    <script src="./script.js"></script>
+</body>
+</html>
