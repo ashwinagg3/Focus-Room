@@ -64,13 +64,19 @@
         body:has(#welcome-page:not(.hidden)) #mobile-topbar,
         body:has(#login-page:not(.hidden)) #mobile-topbar,
         body:has(#register-page:not(.hidden)) #mobile-topbar,
-        body:has(#room-page:not(.hidden)) #mobile-topbar {
+        body:has(#room-page:not(.hidden)) #mobile-topbar,
+        body:has(#welcome-page:not(.hidden)) #sidebar-backdrop,
+        body:has(#login-page:not(.hidden)) #sidebar-backdrop,
+        body:has(#register-page:not(.hidden)) #sidebar-backdrop,
+        body:has(#room-page:not(.hidden)) #sidebar-backdrop {
             display: none !important;
         }
 
-        body:not(:has(#welcome-page:not(.hidden))):not(:has(#login-page:not(.hidden))):not(:has(#register-page:not(.hidden))):not(:has(#room-page:not(.hidden))) #view-container {
-            margin-left: 16rem; /* 64 * 0.25rem = 16rem */
-            width: calc(100% - 16rem);
+        @media (min-width: 1024px) {
+            body:not(:has(#welcome-page:not(.hidden))):not(:has(#login-page:not(.hidden))):not(:has(#register-page:not(.hidden))):not(:has(#room-page:not(.hidden))) #view-container {
+                margin-left: 16rem; /* 64 * 0.25rem = 16rem */
+                width: calc(100% - 16rem);
+            }
         }
 
         /* Generic Alert UI */
@@ -113,7 +119,10 @@
     <!-- Subtle Ambient Background Layer -->
     <div class="fixed inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(37,99,235,0.04)_0%,transparent_80%)] z-0"></div>
 
-    <div id="alert-container" class="fixed top-6 right-6 z-[9999] flex flex-col gap-3"></div>
+    <div id="alert-container" class="fixed top-6 right-6 z-[9999] flex flex-col gap-3 max-w-[calc(100vw-3rem)]"></div>
+
+    <!-- SIDEBAR BACKDROP -->
+    <div id="sidebar-backdrop" onclick="closeSidebar()" class="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 hidden transition-opacity duration-300 opacity-0"></div>
 
     <!-- MOBILE TOP BAR (Hidden on Desktop) -->
     <div id="mobile-topbar" class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-background/90 backdrop-blur-md border-b border-borderline z-40 flex items-center justify-between px-4">
@@ -123,15 +132,15 @@
             </div>
             <span class="font-semibold text-lg tracking-tight">Focus Room</span>
         </div>
-        <button onclick="document.getElementById('app-sidebar').classList.toggle('-translate-x-full');" class="w-10 h-10 flex items-center justify-center rounded-lg bg-black/5 text-text-primary">
+        <button onclick="toggleSidebar()" aria-label="Toggle Menu" class="w-11 h-11 flex items-center justify-center rounded-lg bg-black/5 text-text-primary active:scale-95 transition-transform">
             <span class="material-symbols-rounded text-[24px]">menu</span>
         </button>
     </div>
 
     <!-- MAIN APP SIDEBAR -->
-    <nav id="app-sidebar" class="fixed left-0 top-0 h-screen w-64 bg-background/95 backdrop-blur-md border-r border-borderline flex flex-col z-50 transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
-        <button onclick="document.getElementById('app-sidebar').classList.add('-translate-x-full');" class="lg:hidden absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg bg-black/5 text-text-secondary hover:text-text-primary">
-            <span class="material-symbols-rounded text-[20px]">close</span>
+    <nav id="app-sidebar" class="fixed left-0 top-0 h-screen w-72 sm:w-80 lg:w-64 bg-background/95 backdrop-blur-md border-r border-borderline flex flex-col z-50 transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
+        <button onclick="closeSidebar()" aria-label="Close Menu" class="lg:hidden absolute top-4 right-4 w-11 h-11 flex items-center justify-center rounded-lg bg-black/5 text-text-secondary hover:text-text-primary active:scale-95 transition-transform">
+            <span class="material-symbols-rounded text-[24px]">close</span>
         </button>
         <div class="p-6 flex items-center gap-3">
             <div class="w-6 h-6 bg-primary rounded shadow-subtle flex items-center justify-center">
@@ -245,7 +254,7 @@
                             <span class="material-symbols-rounded text-[14px]">psychology</span>
                             Premium productivity
                         </div>
-                        <h1 class="text-5xl lg:text-7xl font-bold tracking-tight text-text-primary leading-[1.1] mb-6">
+                        <h1 class="text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight text-text-primary leading-[1.1] mb-6">
                             Where deep work happens.
                         </h1>
                         <p class="text-lg text-text-secondary mb-10 leading-relaxed">
@@ -283,7 +292,7 @@
         <div id="login-page" class="view hidden">
             <div class="min-h-screen flex items-center justify-center bg-background px-4">
                 <div class="w-full max-w-sm bg-surface border border-borderline rounded-2xl shadow-soft p-8">
-                    <button id="btn-back-to-welcome-1" class="text-text-muted hover:text-text-primary mb-8 text-sm flex items-center gap-1 transition-colors w-fit">
+                    <button id="btn-back-to-welcome-1" class="text-text-muted hover:text-text-primary mb-8 text-sm flex items-center gap-1 transition-colors w-fit min-h-[44px]">
                         <span class="material-symbols-rounded text-[18px]">arrow_back</span> Back
                     </button>
                     <h2 class="text-2xl font-bold tracking-tight mb-2">Welcome back</h2>
@@ -334,7 +343,7 @@
         <div id="register-page" class="view hidden">
             <div class="min-h-screen flex items-center justify-center bg-background px-4 py-12">
                 <div class="w-full max-w-xl bg-surface border border-borderline rounded-2xl shadow-soft p-8 sm:p-10">
-                    <button id="btn-back-to-welcome-2" class="text-text-muted hover:text-text-primary mb-8 text-sm flex items-center gap-1 transition-colors w-fit">
+                    <button id="btn-back-to-welcome-2" class="text-text-muted hover:text-text-primary mb-8 text-sm flex items-center gap-1 transition-colors w-fit min-h-[44px]">
                         <span class="material-symbols-rounded text-[18px]">arrow_back</span> Back
                     </button>
                     <h2 class="text-2xl font-bold tracking-tight mb-2">Create an account</h2>
@@ -376,7 +385,7 @@
         </div>
 
         <!-- DASHBOARD PAGE -->
-        <div id="home-page" class="view hidden p-8 lg:p-12 max-w-6xl mx-auto w-full">
+        <div id="home-page" class="view hidden p-4 sm:p-8 lg:p-12 max-w-6xl mx-auto w-full">
             
             <!-- DEMO BANNER -->
             <div id="demo-banner" class="hidden mb-8 bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-start justify-between gap-4 shadow-sm relative overflow-hidden">
@@ -397,10 +406,10 @@
             <header class="mb-10 flex flex-col lg:flex-row justify-between lg:items-end gap-6">
                 <div class="flex flex-col">
                     <h1 id="home-greeting" class="text-3xl font-bold tracking-tight text-text-primary">Good Morning</h1>
-                    <div class="flex flex-wrap items-center gap-4 mt-2">
-                        <p id="home-subtitle" class="text-sm font-medium text-text-secondary">Ready to start another productive day.</p>
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-4 mt-2">
+                        <p id="home-subtitle" class="text-sm font-medium text-text-secondary w-full sm:w-auto">Ready to start another productive day.</p>
                         <div class="h-4 w-px bg-borderline hidden sm:block"></div>
-                        <div class="hidden sm:flex items-center gap-4 text-sm text-text-secondary font-medium">
+                        <div class="flex items-center gap-4 text-sm text-text-secondary font-medium">
                             <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-primary/60"></span> <strong id="hero-daily-mins" class="font-bold text-text-primary">0</strong> mins focused</span>
                             <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-warning/60"></span> <strong id="hero-streak" class="font-bold text-text-primary">0</strong> days streak</span>
                         </div>
@@ -454,7 +463,7 @@
                              <span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(22,163,74,0.6)] animate-pulse"></span> Live
                         </div>
                     </div>
-                    <div class="grid grid-cols-3 gap-4 mb-5 relative z-10">
+                    <div class="grid grid-cols-3 gap-2 sm:gap-4 mb-5 relative z-10">
                          <div>
                              <div class="text-xl font-bold text-text-primary tabular-nums tracking-tight">127</div>
                              <div class="text-[9px] text-text-secondary font-semibold uppercase tracking-widest mt-0.5">Users Focusing</div>
@@ -616,11 +625,11 @@
 
                     <!-- ACTIVE ROOMS -->
                     <section>
-                        <div class="flex items-center justify-between mb-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
                             <h3 class="text-sm font-semibold text-text-primary">Active Sessions</h3>
-                            <div class="flex items-center gap-2 bg-surface border border-borderline p-1 rounded-xl shadow-subtle">
-                               <input type="text" id="input-room-code" placeholder="Code" class="bg-transparent px-3 py-1.5 text-text-primary text-xs focus:outline-none w-24">
-                               <button id="btn-join-room" class="bg-primary text-white font-medium text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-soft">Join</button>
+                            <div class="flex items-center gap-2 bg-surface border border-borderline p-1 rounded-xl shadow-subtle w-full sm:w-auto">
+                               <input type="text" id="input-room-code" placeholder="Code" class="bg-transparent px-3 py-1.5 text-text-primary text-xs focus:outline-none flex-1 sm:w-24 min-w-0">
+                               <button id="btn-join-room" class="bg-primary text-white font-medium text-[10px] uppercase tracking-widest px-4 py-2 sm:px-3 sm:py-1.5 rounded-lg hover:bg-primary/90 transition-soft whitespace-nowrap min-h-[44px] sm:min-h-0">Join</button>
                             </div>
                         </div>
                         <div id="room-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -729,40 +738,44 @@
         </div>
 
         <!-- LEADERBOARD PAGE -->
-        <div id="global-leaderboard-page" class="view hidden p-8 lg:p-12 max-w-4xl mx-auto w-full">
+        <div id="global-leaderboard-page" class="view hidden p-4 sm:p-8 lg:p-12 max-w-4xl mx-auto w-full">
             <header class="mb-8 flex items-center justify-between">
                 <div>
                     <h2 class="text-2xl font-bold tracking-tight text-text-primary">Leaderboard</h2>
                     <p class="text-sm text-text-secondary mt-1">Top performers ranked by mastery points.</p>
                 </div>
-                <button id="btn-back-home-lb" class="text-sm font-medium text-text-secondary hover:text-text-primary flex items-center gap-1.5 bg-background border border-borderline px-4 py-2 rounded-xl transition-soft" onclick="showView('home')">
+                <button id="btn-back-home-lb" class="text-sm font-medium text-text-secondary hover:text-text-primary flex items-center gap-1.5 bg-background border border-borderline px-4 py-2 rounded-xl transition-soft min-h-[44px]" onclick="showView('home')">
                     <span class="material-symbols-rounded text-[18px]">arrow_back</span> Return
                 </button>
             </header>
             
             <div class="bg-surface border border-borderline rounded-2xl shadow-soft overflow-hidden">
-                <div class="grid grid-cols-12 gap-4 p-4 border-b border-borderline bg-background text-[10px] font-bold text-text-secondary uppercase tracking-widest">
-                    <div class="col-span-1 text-center">Rank</div>
-                    <div class="col-span-4">Operator</div>
-                    <div class="col-span-2 text-center">Mastery</div>
-                    <div class="col-span-2 text-center">Focus Score</div>
-                    <div class="col-span-3 text-right">Consistency</div>
-                </div>
-                <div id="global-leaderboard-list" class="divide-y divide-borderline">
-                    <!-- Leaderboard items injected here -->
+                <div class="overflow-x-auto w-full">
+                    <div class="min-w-[600px]">
+                        <div class="grid grid-cols-12 gap-4 p-4 border-b border-borderline bg-background text-[10px] font-bold text-text-secondary uppercase tracking-widest">
+                            <div class="col-span-1 text-center">Rank</div>
+                            <div class="col-span-4">Operator</div>
+                            <div class="col-span-2 text-center">Mastery</div>
+                            <div class="col-span-2 text-center">Focus Score</div>
+                            <div class="col-span-3 text-right">Consistency</div>
+                        </div>
+                        <div id="global-leaderboard-list" class="divide-y divide-borderline">
+                            <!-- Leaderboard items injected here -->
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- CREATE ROOM PAGE -->
-        <div id="create-room-page" class="view hidden p-8 lg:p-12 max-w-3xl mx-auto w-full">
+        <div id="create-room-page" class="view hidden p-4 sm:p-8 lg:p-12 max-w-3xl mx-auto w-full">
             <header class="mb-10 flex items-center justify-between">
                 <div>
                     <h2 class="text-2xl font-bold tracking-tight text-text-primary">Create Focus Session</h2>
                     <p class="text-sm text-text-secondary mt-1">Set up a quiet space to accomplish deep work.</p>
                 </div>
-                <button id="btn-back-home" class="w-8 h-8 flex items-center justify-center rounded-full bg-background border border-borderline text-text-secondary hover:text-text-primary transition-soft">
-                    <span class="material-symbols-rounded text-[20px]">close</span>
+                <button id="btn-back-home" class="w-11 h-11 flex items-center justify-center rounded-full bg-background border border-borderline text-text-secondary hover:text-text-primary transition-soft shrink-0">
+                    <span class="material-symbols-rounded text-[24px]">close</span>
                 </button>
             </header>
             
@@ -819,21 +832,21 @@
         <div id="room-page" class="view hidden h-screen flex flex-col bg-background">
             
             <!-- Top Header -->
-            <header class="h-16 border-b border-borderline bg-surface flex justify-between items-center px-6 shrink-0">
-                <div class="flex items-center gap-4">
-                    <button id="btn-leave-room" class="text-sm font-medium text-text-secondary hover:text-danger flex items-center gap-1.5 transition-colors">
-                        <span class="material-symbols-rounded text-[18px]">arrow_back</span> Leave
+            <header class="h-auto min-h-[4rem] py-2 border-b border-borderline bg-surface flex flex-wrap justify-between items-center px-4 sm:px-6 shrink-0 gap-3">
+                <div class="flex items-center gap-3 sm:gap-4 w-full sm:w-auto overflow-hidden">
+                    <button id="btn-leave-room" class="text-sm font-medium text-text-secondary hover:text-danger flex items-center gap-1.5 transition-colors shrink-0 p-2 sm:p-0 -ml-2 sm:ml-0 min-h-[44px] min-w-[44px]">
+                        <span class="material-symbols-rounded text-[20px] sm:text-[18px]">arrow_back</span> <span class="hidden sm:inline">Leave</span>
                     </button>
-                    <div class="h-5 w-px bg-borderline"></div>
-                    <div class="flex items-center gap-3">
-                        <span id="room-mode" class="text-[10px] font-semibold uppercase tracking-wider text-text-secondary bg-background px-2 py-1 rounded">Commitment</span>
-                        <h2 id="room-title" class="font-semibold text-text-primary">Focus Session</h2>
+                    <div class="h-5 w-px bg-borderline shrink-0"></div>
+                    <div class="flex items-center gap-2 sm:gap-3 overflow-hidden">
+                        <span id="room-mode" class="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-wider text-text-secondary bg-background px-2 py-1 rounded shrink-0">Commitment</span>
+                        <h2 id="room-title" class="font-semibold text-text-primary text-sm sm:text-base truncate">Focus Session</h2>
                     </div>
                 </div>
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-2 text-sm bg-background border border-borderline px-3 py-1.5 rounded-lg text-text-secondary font-medium">
+                <div class="flex items-center gap-3 ml-auto sm:ml-0 w-full sm:w-auto justify-end sm:justify-start">
+                    <div class="flex items-center gap-2 text-xs sm:text-sm bg-background border border-borderline px-3 py-1.5 rounded-lg text-text-secondary font-medium shrink-0">
                         Code: <span id="room-code-display" class="text-text-primary tabular-nums">0000</span>
-                        <button id="btn-copy-code" class="text-text-muted hover:text-text-primary transition-colors ml-1 flex items-center"><span class="material-symbols-rounded text-[16px]">content_copy</span></button>
+                        <button id="btn-copy-code" class="text-text-muted hover:text-text-primary transition-colors ml-1 flex items-center p-1 sm:p-0"><span class="material-symbols-rounded text-[16px]">content_copy</span></button>
                     </div>
                 </div>
             </header>
@@ -842,22 +855,22 @@
             <main class="flex-1 flex overflow-hidden">
                 
                 <!-- Center: Video Grid (Hero) -->
-                <section class="flex-1 bg-surface relative p-6 overflow-y-auto flex flex-col">
-                    <div class="flex items-center justify-between mb-4 shrink-0">
+                <section class="flex-1 bg-surface relative p-4 sm:p-6 overflow-y-auto flex flex-col">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 shrink-0 gap-3">
                         <h3 class="text-base font-semibold text-text-primary flex items-center gap-2">
                             <span class="material-symbols-rounded text-[20px] text-text-secondary">groups</span> Participants (<span id="participant-count">0</span>)
                         </h3>
                         <div class="flex gap-2">
-                            <button id="btn-toggle-mic" class="w-10 h-10 rounded-full bg-background border border-borderline flex items-center justify-center text-text-secondary hover:text-text-primary transition-soft shadow-subtle">
+                            <button id="btn-toggle-mic" class="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-background border border-borderline flex items-center justify-center text-text-secondary hover:text-text-primary transition-soft shadow-subtle active:scale-95">
                                 <span class="material-symbols-rounded text-[20px]">mic</span>
                             </button>
-                            <button id="btn-toggle-vid" class="w-10 h-10 rounded-full bg-background border border-borderline flex items-center justify-center text-text-secondary hover:text-text-primary transition-soft shadow-subtle">
+                            <button id="btn-toggle-vid" class="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-background border border-borderline flex items-center justify-center text-text-secondary hover:text-text-primary transition-soft shadow-subtle active:scale-95">
                                 <span class="material-symbols-rounded text-[20px]">videocam</span>
                             </button>
                         </div>
                     </div>
                     <!-- Responsive Video Grid -->
-                    <div id="video-grid" class="grid gap-4 w-full flex-1 min-h-0" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-content: start;">
+                    <div id="video-grid" class="grid gap-3 sm:gap-4 w-full flex-1 min-h-0" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start;">
                         <!-- Videos injected here by script.js -->
                     </div>
                 </section>
@@ -924,10 +937,10 @@
             </main>
 
             <!-- Session Footer -->
-            <footer class="h-10 border-t border-borderline bg-surface flex items-center justify-between px-6 shrink-0 text-xs font-medium text-text-secondary">
-                <div class="flex items-center gap-4">
+            <footer class="h-auto min-h-[2.5rem] py-3 sm:py-2 border-t border-borderline bg-surface flex flex-col sm:flex-row items-center justify-between px-4 sm:px-6 shrink-0 text-[10px] sm:text-xs font-medium text-text-secondary gap-2 sm:gap-4 text-center sm:text-left">
+                <div class="flex flex-wrap justify-center sm:justify-start items-center gap-3 sm:gap-4">
                     <span class="flex items-center gap-1.5"><div class="w-2 h-2 bg-success rounded-full"></div> Connection Stable</span>
-                    <span class="w-px h-3 bg-borderline"></span>
+                    <span class="w-px h-3 bg-borderline hidden sm:block"></span>
                     <span>Accountability Active</span>
                 </div>
                 <div class="flex items-center gap-4">
@@ -1017,8 +1030,8 @@
 
     <!-- SESSION SUMMARY MODAL -->
     <div id="session-summary-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
-        <div class="bg-surface border border-borderline rounded-3xl p-8 max-w-md w-full shadow-hover transform scale-95 transition-transform duration-300 flex flex-col items-center">
-            <div class="w-16 h-16 rounded-2xl bg-success/10 flex items-center justify-center mb-6 shadow-inner-light">
+        <div class="bg-surface border border-borderline rounded-3xl p-6 sm:p-8 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-hover transform scale-95 transition-transform duration-300 flex flex-col items-center">
+            <div class="w-16 h-16 rounded-2xl bg-success/10 flex items-center justify-center mb-6 shadow-inner-light shrink-0">
                 <span class="material-symbols-rounded text-success text-[32px]">workspace_premium</span>
             </div>
             <h2 class="text-2xl font-bold text-text-primary tracking-tight mb-2">Session Complete</h2>
@@ -1055,6 +1068,47 @@
         </div>
     </div>
 
+    <script>
+        // Mobile Sidebar Logic
+        function toggleSidebar() {
+            const sidebar = document.getElementById('app-sidebar');
+            const backdrop = document.getElementById('sidebar-backdrop');
+            
+            if (sidebar.classList.contains('-translate-x-full')) {
+                // Open
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+                // Small delay for smooth fade in
+                setTimeout(() => backdrop.classList.remove('opacity-0'), 10);
+                document.body.style.overflow = 'hidden'; // Prevent background scrolling
+            } else {
+                closeSidebar();
+            }
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.getElementById('app-sidebar');
+            const backdrop = document.getElementById('sidebar-backdrop');
+            
+            if (!sidebar.classList.contains('-translate-x-full')) {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.add('opacity-0');
+                document.body.style.overflow = ''; // Restore scrolling
+                
+                // Wait for transition before hiding completely
+                setTimeout(() => {
+                    backdrop.classList.add('hidden');
+                }, 300);
+            }
+        }
+
+        // Close sidebar on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeSidebar();
+            }
+        });
+    </script>
     <script src="./script.js"></script>
 </body>
 </html>
